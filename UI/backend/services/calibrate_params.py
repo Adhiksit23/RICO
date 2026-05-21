@@ -5,27 +5,18 @@ import json
 import psycopg2
 import sys
 
-import warnings, re, os
-import matplotlib.pyplot as plt
-try:
-    from lightgbm import LGBMClassifier
-except: os.system("pip install lightgbm -q"); from lightgbm import LGBMClassifier
-try:
-    from xgboost import XGBClassifier
-except: os.system("pip install xgboost -q"); from xgboost import XGBClassifier
-warnings.filterwarnings("ignore")
-
 
 def main():
 
     #Database configurations for access
     DB_CONFIG = {
-        "host":     "localhost",
-        "port":     5432,
-        "dbname":   "Oil Pan Dataset",
-        "user":     "postgres",
-        "password": "Datamgnt25!#"
-    }
+    "host":     "aws-1-ap-southeast-2.pooler.supabase.com",
+    "dbname":   "postgres",
+    "user":     "postgres.nnflwohgewhkqqjfvote",
+    "password": "Datamgnt25!#",
+    "options":  "-c search_path=rico"
+    
+}
     
     names_UOM = {'ACCEL. POINT mm ': ['ACCEL. POINT', 'mm'], 'BISCUIT THICKNESS mm ': ['BISCUIT THICKNESS', 'mm'], 'CLAMP FORCE (%) ': ['CLAMP FORCE', '%'], 
             'CLAMP TONNAGE (T) ': ['CLAMP TONNAGE', 'T'], 'CLAMP TONNAGE(HE.LOW) % ': ['CLAMP TONNAGE(HE.LOW)', '%'], 'CLAMP TONNAGE(HE.LOW) MN ': ['CLAMP TONNAGE(HE.LOW)', 'MN'], 
