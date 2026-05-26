@@ -500,16 +500,6 @@
 //   );
 // }
 
-Here is the updated code with the fixes applied.
-
-### Key Improvements Made:
-
-* **Units For Everything:** Integrated your dynamic `getUnit(key)` helper directly into the row displays and form input fields, ensuring every single parameter shows its correct unit.
-* **Strict Two-Decimal Rounding:** Wrapped values (including values inside inputs, baselines, and ranges) with strict rounding logic to prevent unexpected exponential forms or endless decimal trails.
-* **Fixed Controlled Input Bug:** In your previous iteration, forcing `.toFixed(2)` directly on the input `value` attribute made typing decimals impossible (e.g., trying to type `12.3` would lock up). The code now correctly handles input typing states while maintaining clean visual formatting.
-* **Proportional & Dynamic Visualization Bar:** Rewrote the visualization bar logic. It now calculates the precise percentage positions of `min_range` and `max_range` relative to an expanded graph field ($[\text{min} - \text{spread}, \text{max} + \text{spread}]$), so the green "Zero-Defect Range" expands and contracts exactly matching the API data.
-
-```tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -532,7 +522,7 @@ type RangeData = {
 const getUnit = (key: string): string => {
   const lower = key.toLowerCase();
   if (lower.includes("mm")) return "mm";
-  if (lower.includes("bar")) return "bar";
+  if (lower.includes("bar") || lower.includes("pressure")) return "bar";
   if (lower.includes("%")) return "%";
   if (lower.includes("sec") || lower.includes("time")) return "s";
   if (lower.includes("°c") || lower.includes("temperature")) return "°C";
@@ -550,10 +540,12 @@ export default function CalibrationPage() {
   });
 
   const [ranges, setRanges] = useState<Record<string, RangeData>>({});
-  const [latestParams, setLatestParams] = useState<Record<string, string | number>>({});
+  
+  // Storing input values as strings so typing decimals (like "1.", "1.2") doesn't break
+  const [latestParams, setLatestParams] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("");
 
-  // ---------------- FETCH ----------------
+  // ---------------- FETCH APIs ----------------
 
   useEffect(() => {
     fetch(`${base_api}/api/calibrator/run`, {
@@ -567,7 +559,14 @@ export default function CalibrationPage() {
       headers: { "ngrok-skip-browser-warning": "true" },
     })
       .then((res) => res.json())
-      .then((data: Record<string, number>) => setLatestParams(data))
+      .then((data: Record<string, number>) => {
+        // Convert initial numeric values to strings formatted to 2 decimal places
+        const stringified: Record<string, string> = {};
+        Object.entries(data).forEach(([k, v]) => {
+          stringified[k] = Number(v).toFixed(2);
+        });
+        setLatestParams(stringified);
+      })
       .catch((err) => console.error(err));
 
     fetch(`${base_api}/api/calibration/ranges`, {
@@ -600,13 +599,12 @@ export default function CalibrationPage() {
     }));
   };
 
-  // ---------------- DYNAMIC GRAPH BOUNDS ----------------
-
+  // Calculates percentage positioning relative to a dynamic viewport boundary
   const getPercentage = (value: number, min: number, max: number): number => {
     if (max === min || isNaN(value)) return 50;
     const spread = Math.abs(max - min) || 1;
     
-    // Create a dynamic viewport range around the target bands
+    // Expand viewport mapping limits slightly outward to prevent bounding-edge clips
     const graphMin = min - spread * 0.5;
     const graphMax = max + spread * 0.5;
 
@@ -614,11 +612,10 @@ export default function CalibrationPage() {
     return Math.max(0, Math.min(100, percentage));
   };
 
-  // ---------------- APPLY ----------------
+  // ---------------- APPLY CALIBRATION ----------------
 
   const applyCalibration = async () => {
     try {
-      // Clean values up back to pure numbers before sending payload
       const payload: Record<string, number> = {};
       Object.entries(latestParams).forEach(([k, v]) => {
         payload[k] = Number(v);
@@ -632,7 +629,8 @@ export default function CalibrationPage() {
 
       const data = await res.json();
       setStatus(data.message || "Calibration Applied Successfully");
-    } catch {
+    } catch (err) {
+      console.error(err);
       setStatus("Failed to apply calibration");
     }
   };
@@ -648,7 +646,7 @@ export default function CalibrationPage() {
           </p>
         </div>
 
-        {/* SUMMARY */}
+        {/* SUMMARY SECTION */}
         <div className="flex gap-3">
           <div className="bg-[#121B2B] border border-[#1F2937] rounded-lg px-4 py-3 min-w-[125px]">
             <div className="text-[10px] uppercase tracking-[2px] text-gray-500">Samples Analyzed</div>
@@ -659,7 +657,9 @@ export default function CalibrationPage() {
 
           <div className="bg-[#121B2B] border border-[#1F2937] rounded-lg px-4 py-3 min-w-[100px]">
             <div className="text-[10px] uppercase tracking-[2px] text-gray-500">Avg CPK</div>
-            <div className="text-cyan-400 text-2xl font-bold mt-1">{summary.avg_cpk.toFixed(2)}</div>
+            <div className="text-cyan-400 text-2xl font-bold mt-1">
+              {Number(summary.avg_cpk).toFixed(2)}
+            </div>
           </div>
 
           <div className="bg-[#121B2B] border border-green-500/20 rounded-lg px-4 py-3 min-w-[110px]">
@@ -687,12 +687,12 @@ export default function CalibrationPage() {
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* TABLE METRICS */}
       <div className="bg-[#121B2B] border border-[#1F2937] rounded-xl overflow-hidden">
         {/* TABLE HEADER */}
         <div className="grid grid-cols-[2.3fr_1fr_1fr_0.7fr_2fr_0.7fr_0.7fr] px-4 py-3 border-b border-[#1F2937] text-[10px] uppercase tracking-[2px] text-gray-500">
           <div>Parameter</div>
-          <div>Current Value</div>
+          <div>Baseline</div>
           <div>Optimal Range</div>
           <div>Std Dev</div>
           <div>Range Visualization</div>
@@ -704,9 +704,13 @@ export default function CalibrationPage() {
         {rows.map(([key, value], index) => {
           const normalizedKey = normalizeKey(key);
           const unit = getUnit(key);
-          const currentValue = Number(latestParams[normalizedKey] ?? value.baseline);
+          
+          // Current dynamic reading fallback to target baseline setup
+          const currentValue = latestParams[normalizedKey] !== undefined 
+            ? Number(latestParams[normalizedKey]) 
+            : value.baseline;
 
-          // Generate dynamic scaling percentages relative to our graph window bounds
+          // Dynamic calculation mapping anchors strictly relative to ranges retrieved
           const minRangePercent = getPercentage(value.min_range, value.min_range, value.max_range);
           const maxRangePercent = getPercentage(value.max_range, value.min_range, value.max_range);
           const needlePosition = getPercentage(currentValue, value.min_range, value.max_range);
@@ -716,7 +720,7 @@ export default function CalibrationPage() {
               key={index}
               className="grid grid-cols-[2.3fr_1fr_1fr_0.7fr_2fr_0.7fr_0.7fr] px-4 py-4 border-b border-[#182232] items-center hover:bg-[#0D1625] transition-all"
             >
-              {/* PARAMETER */}
+              {/* PARAMETER DETAILED DESCRIPTOR */}
               <div>
                 <div className="text-white text-[16px] font-semibold">{key}</div>
                 <div className="text-gray-500 text-[11px] mt-1">
@@ -724,28 +728,28 @@ export default function CalibrationPage() {
                 </div>
               </div>
 
-              {/* BASELINE / CURRENT VALUE */}
+              {/* BASELINE DISPLAY */}
               <div className="text-cyan-400 font-semibold text-[16px]">
-                {currentValue.toFixed(2)} {unit}
+                {value.baseline.toFixed(2)} {unit}
               </div>
 
-              {/* RANGE */}
+              {/* OPTIMAL ACCURACY WINDOW */}
               <div className="text-green-400 text-[16px]">
                 {value.min_range.toFixed(2)} - {value.max_range.toFixed(2)} {unit}
               </div>
 
-              {/* STD DEV */}
+              {/* STD DEV VARIATION */}
               <div className="text-gray-400 text-sm">
                 ±{value.tolerance.toFixed(2)} {unit}
               </div>
 
-              {/* DYNAMIC RANGE VISUALIZATION */}
+              {/* DYNAMIC PROGRESS RANGE VISUALIZATION BAR */}
               <div className="pr-4">
                 <div className="relative h-8 rounded-full bg-[#0B1320] border border-[#1F2937] overflow-hidden">
-                  {/* TOLERANCE */}
-                  <div className="absolute top-0 h-full bg-yellow-500/10 left-[0%] w-[100%]" />
+                  {/* TOLERANCE OVERALL BOX MAPPING */}
+                  <div className="absolute top-0 h-full bg-yellow-500/10 left-0 w-full" />
 
-                  {/* DYNAMIC GREEN WINDOW */}
+                  {/* DYNAMIC SCALE ADAPTIVE OPTIMAL TRACK */}
                   <div
                     className="absolute top-0 h-full bg-green-500/25 transition-all duration-500"
                     style={{
@@ -754,7 +758,7 @@ export default function CalibrationPage() {
                     }}
                   />
 
-                  {/* CURRENT NEEDLE */}
+                  {/* CURRENT VAL SCALE NEEDLE */}
                   <div
                     className="absolute top-0 h-full w-[3px] bg-cyan-400 shadow-[0_0_12px_#22d3ee] transition-all duration-500"
                     style={{
@@ -764,12 +768,12 @@ export default function CalibrationPage() {
                 </div>
               </div>
 
-              {/* SAMPLES */}
+              {/* BATCH SAMPLE TRACKER */}
               <div className="text-gray-400 text-sm">
                 {Math.floor(2000 + index * 120).toLocaleString()}
               </div>
 
-              {/* CPK */}
+              {/* PROCESS METRIC RATIO */}
               <div>
                 <div className="bg-green-500/15 text-green-400 text-xs px-2 py-1 rounded-md text-center font-semibold">
                   {(1.35 + index * 0.09).toFixed(2)}
@@ -780,7 +784,7 @@ export default function CalibrationPage() {
         })}
       </div>
 
-      {/* UPDATE PARAMETERS */}
+      {/* CALIBRATION INPUT SECTION */}
       <div className="bg-[#121B2B] border border-[#1F2937] rounded-xl mt-6 p-5">
         <h2 className="text-xl font-semibold mb-5">Update Current Parameters</h2>
 
@@ -789,7 +793,7 @@ export default function CalibrationPage() {
             const normalizedKey = normalizeKey(key);
             const unit = getUnit(key);
             
-            // Fallback cleanly to string to preserve precise typing states while input is changing
+            // Clean handling typing state strings gracefully without breaking state synchronization
             const inputValue = latestParams[normalizedKey] !== undefined 
               ? latestParams[normalizedKey] 
               : value.baseline.toFixed(2);
@@ -806,7 +810,7 @@ export default function CalibrationPage() {
                     className="w-full bg-[#0B1320] border border-[#1F2937] rounded-lg px-4 py-3 pr-16 text-white outline-none focus:border-cyan-400"
                   />
                   {unit && (
-                    <span className="absolute right-4 top-3 text-gray-500 text-sm">
+                    <span className="absolute right-4 top-3 text-gray-500 text-sm select-none">
                       {unit}
                     </span>
                   )}
@@ -816,7 +820,7 @@ export default function CalibrationPage() {
           })}
         </div>
 
-        {/* APPLY */}
+        {/* APPLY SUBMISSION CONTAINER */}
         <div className="flex justify-center mt-8">
           <button
             onClick={applyCalibration}
@@ -827,10 +831,12 @@ export default function CalibrationPage() {
         </div>
       </div>
 
-      {/* STATUS */}
-      <div className="text-center text-cyan-400 mt-6 text-lg font-semibold">{status}</div>
+      {/* NOTIFICATION ELEMENT STATUS */}
+      {status && (
+        <div className="text-center text-cyan-400 mt-6 text-lg font-semibold animate-pulse">
+          {status}
+        </div>
+      )}
     </div>
   );
 }
-
-```
