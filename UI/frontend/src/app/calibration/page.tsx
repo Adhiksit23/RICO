@@ -520,20 +520,38 @@ type RangeData = {
   max_range: number;
 };
 
-const parameterUnits: Record<string, string> = {
-  "Pouring Time": "s",
-  "Shot Forward Time": "s",
-  "Cooling Time": "s",
-  "Die Open/Core Out Time": "s",
-  "Ejector Time": "s",
-  "Extraction Time": "s",
-  "Spray Time": "s",
-  "Speed 1": "m/s",
-  "Speed 2": "m/s",
-  "Speed 3": "m/s",
-  "Speed 4": "m/s",
-  "Metal Pressure": "bar",
-  "Metal Temperature": "°C",
+const getUnit = (
+  key: string
+): string => {
+
+  const lower =
+    key.toLowerCase();
+
+  if (lower.includes("mm"))
+    return "mm";
+
+  if (lower.includes("bar"))
+    return "bar";
+
+  if (lower.includes("%"))
+    return "%";
+
+  if (lower.includes("sec"))
+    return "sec";
+
+  if (lower.includes("°c"))
+    return "°C";
+
+  if (lower.includes("l/min"))
+    return "L/min";
+
+  if (lower.includes("m/s"))
+    return "m/s";
+
+  if (lower.includes("(t)"))
+    return "T";
+
+  return "";
 };
 
 export default function CalibrationPage() {
@@ -570,10 +588,7 @@ export default function CalibrationPage() {
       .then((res) => res.json())
       .then((data: SummaryData) => {
         setSummary(data);
-      })
-      .catch((err) =>
-        console.error(err)
-      );
+      });
 
     fetch(
       `${base_api}/api/calibration/latest`,
@@ -589,9 +604,6 @@ export default function CalibrationPage() {
         (data: Record<string, number>) => {
           setLatestParams(data);
         }
-      )
-      .catch((err) =>
-        console.error(err)
       );
 
     fetch(
@@ -613,9 +625,6 @@ export default function CalibrationPage() {
         ) => {
           setRanges(data);
         }
-      )
-      .catch((err) =>
-        console.error(err)
       );
 
   }, []);
@@ -639,17 +648,6 @@ export default function CalibrationPage() {
 
   };
 
-  const getUnit = (
-    key: string
-  ): string => {
-
-    return (
-      parameterUnits[key.trim()] ||
-      ""
-    );
-
-  };
-
   const handleChange = (
     key: string,
     value: string
@@ -670,16 +668,20 @@ export default function CalibrationPage() {
     max: number
   ): number => {
 
-    if (max === min) return 50;
+    if (
+      max === min ||
+      isNaN(value)
+    )
+      return 50;
 
-    const padding =
-      (max - min) * 0.5;
+    const spread =
+      Math.abs(max - min);
 
     const graphMin =
-      min - padding;
+      min - spread;
 
     const graphMax =
-      max + padding;
+      max + spread;
 
     const percentage =
       ((value - graphMin) /
@@ -723,9 +725,7 @@ export default function CalibrationPage() {
             "Calibration Applied Successfully"
         );
 
-      } catch (err) {
-
-        console.error(err);
+      } catch {
 
         setStatus(
           "Failed to apply calibration"
@@ -803,33 +803,24 @@ export default function CalibrationPage() {
       <div className="bg-[#121B2B] border border-[#1F2937] rounded-lg px-5 py-3 mb-4 flex items-center gap-5 text-sm">
 
         <div className="flex items-center gap-2">
-
           <div className="w-4 h-4 rounded bg-yellow-500/30" />
-
           <span className="text-gray-400">
             Tolerance Band
           </span>
-
         </div>
 
         <div className="flex items-center gap-2">
-
           <div className="w-4 h-4 rounded bg-green-500/30" />
-
           <span className="text-gray-400">
-            Optimal Range
+            Zero-Defect Range
           </span>
-
         </div>
 
         <div className="flex items-center gap-2">
-
           <div className="w-[3px] h-5 rounded bg-cyan-400" />
-
           <span className="text-gray-400">
-            Current Value
+            Current Value Indicator
           </span>
-
         </div>
 
       </div>
@@ -838,12 +829,12 @@ export default function CalibrationPage() {
 
       <div className="bg-[#121B2B] border border-[#1F2937] rounded-xl overflow-hidden">
 
-        {/* HEADER */}
+        {/* TABLE HEADER */}
 
         <div className="grid grid-cols-[2.3fr_1fr_1fr_0.7fr_2fr_0.7fr_0.7fr] px-4 py-3 border-b border-[#1F2937] text-[10px] uppercase tracking-[2px] text-gray-500">
 
           <div>Parameter</div>
-          <div>Current Value</div>
+          <div>Baseline</div>
           <div>Optimal Range</div>
           <div>Std Dev</div>
           <div>Range Visualization</div>
@@ -897,19 +888,17 @@ export default function CalibrationPage() {
                   -{" "}
                   {value.max_range.toFixed(
                     2
-                  )}{" "}
-                  {getUnit(key)}
+                  )}
 
                 </div>
 
               </div>
 
-              {/* CURRENT VALUE */}
+              {/* BASELINE */}
 
               <div className="text-cyan-400 font-semibold text-[16px]">
 
-                {currentValue.toFixed(2)}{" "}
-                {getUnit(key)}
+                {currentValue.toFixed(2)}
 
               </div>
 
@@ -923,8 +912,7 @@ export default function CalibrationPage() {
                 -{" "}
                 {value.max_range.toFixed(
                   2
-                )}{" "}
-                {getUnit(key)}
+                )}
 
               </div>
 
@@ -935,16 +923,15 @@ export default function CalibrationPage() {
                 ±
                 {value.tolerance.toFixed(
                   2
-                )}{" "}
-                {getUnit(key)}
+                )}
 
               </div>
 
-              {/* DYNAMIC RANGE VISUAL */}
+              {/* DYNAMIC RANGE */}
 
               <div className="pr-4">
 
-                <div className="relative h-7 rounded-full bg-[#0B1320] border border-[#1F2937] overflow-hidden">
+                <div className="relative h-8 rounded-full bg-[#0B1320] border border-[#1F2937] overflow-hidden">
 
                   {/* TOLERANCE */}
 
@@ -956,23 +943,34 @@ export default function CalibrationPage() {
                     }}
                   />
 
-                  {/* OPTIMAL RANGE */}
+                  {/* DYNAMIC GREEN */}
 
                   <div
                     className="absolute top-0 h-full bg-green-500/25 transition-all duration-500"
                     style={{
                       left: `${Math.max(
-                        0,
-                        needlePosition - 15
+                        10,
+                        needlePosition - 20
                       )}%`,
-                      width: "30%",
+                      width: `${Math.min(
+                        50,
+                        Math.max(
+                          20,
+                          100 /
+                            (
+                              value.max_range -
+                              value.min_range +
+                              1
+                            )
+                        )
+                      )}%`,
                     }}
                   />
 
-                  {/* CURRENT NEEDLE */}
+                  {/* CURRENT */}
 
                   <div
-                    className="absolute top-0 h-full w-[3px] bg-cyan-400 shadow-[0_0_10px_#22d3ee] transition-all duration-500"
+                    className="absolute top-0 h-full w-[3px] bg-cyan-400 shadow-[0_0_12px_#22d3ee] transition-all duration-500"
                     style={{
                       left: `${needlePosition}%`,
                     }}
@@ -1049,23 +1047,17 @@ export default function CalibrationPage() {
                   <input
                     type="number"
                     step="0.01"
-                    value={currentValue.toFixed(
-                      2
-                    )}
+                    value={Number(
+                      currentValue
+                    ).toFixed(2)}
                     onChange={(e) =>
                       handleChange(
                         normalizedKey,
                         e.target.value
                       )
                     }
-                    className="w-full bg-[#0B1320] border border-[#1F2937] rounded-lg px-4 py-3 pr-16 text-white outline-none focus:border-cyan-400"
+                    className="w-full bg-[#0B1320] border border-[#1F2937] rounded-lg px-4 py-3 text-white outline-none focus:border-cyan-400"
                   />
-
-                  <span className="absolute right-4 top-3 text-gray-500 text-sm">
-
-                    {getUnit(key)}
-
-                  </span>
 
                 </div>
 
@@ -1076,7 +1068,7 @@ export default function CalibrationPage() {
 
         </div>
 
-        {/* APPLY BUTTON */}
+        {/* APPLY */}
 
         <div className="flex justify-center mt-8">
 
