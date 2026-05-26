@@ -785,7 +785,7 @@ export default function CalibrationPage() {
       </div>
 
       {/* CALIBRATION INPUT SECTION */}
-      <div className="bg-[#121B2B] border border-[#1F2937] rounded-xl mt-6 p-5">
+      {/* <div className="bg-[#121B2B] border border-[#1F2937] rounded-xl mt-6 p-5">
         <h2 className="text-xl font-semibold mb-5">Update Current Parameters</h2>
 
         <div className="grid grid-cols-3 gap-4">
@@ -829,7 +829,143 @@ export default function CalibrationPage() {
             APPLY CALIBRATION
           </button>
         </div>
-      </div>
+      </div> */}
+
+
+    {/* CALIBRATION INPUT SECTION */}
+
+<div className="bg-[#121B2B] border border-[#1F2937] rounded-xl mt-6 p-5">
+
+  <h2 className="text-xl font-semibold mb-5">
+    Update Current Parameters
+  </h2>
+
+  <div className="grid grid-cols-3 gap-4">
+
+    {rows.map(([key, value], index) => {
+
+      const normalizedKey =
+        normalizeKey(key);
+
+      const unit =
+        getUnit(key);
+
+      const inputValue =
+        latestParams[
+          normalizedKey
+        ] !== undefined
+          ? latestParams[
+              normalizedKey
+            ]
+          : value.baseline.toFixed(
+              2
+            );
+
+      return (
+
+        <div
+          key={index}
+          className="bg-[#0B1320] border border-[#1F2937] rounded-xl p-4"
+        >
+
+          {/* PARAMETER */}
+
+          <div className="text-white text-sm font-semibold mb-3">
+
+            {key}
+
+          </div>
+
+          {/* LOWER + UPPER TOLERANCE */}
+
+          <div className="flex justify-between text-xs mb-3">
+
+            <div>
+
+              <div className="text-gray-500">
+                Lower
+              </div>
+
+              <div className="text-green-400 font-semibold">
+
+                {value.min_range.toFixed(
+                  2
+                )}{" "}
+                {unit}
+
+              </div>
+
+            </div>
+
+            <div className="text-right">
+
+              <div className="text-gray-500">
+                Upper
+              </div>
+
+              <div className="text-red-400 font-semibold">
+
+                {value.max_range.toFixed(
+                  2
+                )}{" "}
+                {unit}
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* INPUT */}
+
+          <div className="relative">
+
+            <input
+              type="number"
+              step="0.01"
+              value={inputValue}
+              onChange={(e) =>
+                handleChange(
+                  normalizedKey,
+                  e.target.value
+                )
+              }
+              className="w-full bg-[#07111F] border border-[#1F2937] rounded-lg px-4 py-3 pr-16 text-white outline-none focus:border-cyan-400"
+            />
+
+            {unit && (
+
+              <span className="absolute right-4 top-3 text-gray-500 text-sm select-none">
+
+                {unit}
+
+              </span>
+
+            )}
+
+          </div>
+
+        </div>
+
+      );
+    })}
+
+  </div>
+
+  {/* APPLY BUTTON */}
+
+  <div className="flex justify-center mt-8">
+
+    <button
+      onClick={applyCalibration}
+      className="bg-cyan-500 hover:bg-cyan-400 transition-all text-black font-bold px-10 py-4 rounded-xl text-lg"
+    >
+      APPLY CALIBRATION
+    </button>
+
+  </div>
+
+</div>
 
       {/* NOTIFICATION ELEMENT STATUS */}
       {status && (
