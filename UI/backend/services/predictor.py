@@ -12,7 +12,7 @@ except: os.system("pip install xgboost -q"); from xgboost import XGBClassifier
 warnings.filterwarnings("ignore")
 import psycopg2
 import pickle
-from datetime import date as _date_cls
+from datetime import date
 import requests
 
 
@@ -24,37 +24,8 @@ USERNAME = "sanjeev"
 PASSWORD = "Sanjeev@rico123"
 
 TOKEN_JSON_PATH = "token"
- 
-OUTPUT_DIR = "data"
- 
 
-
-def get_auth_token() -> str:
-    """Step 1: POST credentials, pull the token out of the JSON response."""
-    url = f"{BASE_URL}{AUTH_PATH}"
-    payload = {"username": USERNAME, "password": PASSWORD}
  
-    resp = requests.post(url, json=payload, timeout=15)
-    resp.raise_for_status()
-    body = resp.json()
- 
-    token = body
-    for key in TOKEN_JSON_PATH.split("."):
-        token = token[key]
- 
-    if not isinstance(token, str):
-        raise ValueError(f"Expected a string token at '{TOKEN_JSON_PATH}', got: {token!r}")
-    return token
-
-def get_iot_data(token: str):
-    """Step 2: GET the data endpoint using the token from step 1."""
-    url = f"{BASE_URL}{DATA_PATH}"
-    headers = {"Authorization": f"Bearer {token}"}
- 
-    resp = requests.get(url, headers=headers, timeout=15)
-    resp.raise_for_status()
-    return resp.json()
-
 PARAM_COLS = [
     "cycletime value (sec)",
     #"DIE CLOSE/CORE IN Parameter (sec)value",
@@ -148,6 +119,108 @@ DB_CONFIG = {
     
 }
 
+IOT_NAMES_UOM = {'accel_point': ['ACCEL. POINT', 'mm'], 
+             'biscuit_thickness': ['BISCUIT THICKNESS', 'mm'], 
+             'clamp_force_pct': ['CLAMP FORCE', '%'], 
+            'clamp_tonnage': ['CLAMP TONNAGE', 'Mn'], 
+            'curing_time': ['CURING TIME', 'sec'], 
+            'deaccel_point': ['DEACEL. POINT',  'mm'], 
+            'die_open_core_out_time': ['DIE OPEN CORE OUT TIME', 'sec'], 
+            'die_close_core_in_time': ['DIE-CLOSE CORE IN TIME', 'sec'], 
+            'ejector_time': ['EJECTOR TIME', 'sec'],
+            'extract_time': ['EXTRACT TIME', 'sec'],  
+            'furnace_metal_temp': ['FURNACE METAL TEMP.', 'C'], 
+            'intensification_time': ['INTEN. TIME', 'msec'], 
+            'intensification_acc_pressure': ['INTENSIFICATION ACC. PRESSURE', 'mPa'], 
+            'metal_pressure': ['METAL PRESS.', 'mPa'],
+            'pouring_time': ['POURING TIME', 'sec'], 
+            'shot_acc_pressure': ['SHOT ACC. PRESSURE', 'Mpa'], 
+            'shot_fwd_time': ['SHOT FWD TIME', 'sec'], 
+            'spray_time': ['SPRAY TIME', 'sec'], 
+            'v1_speed': ['V1', 'm/sec'], 
+            'v2_speed': ['V2', 'm/sec'], 
+            'v3_speed': ['V3', 'm/sec'], 
+            'v4_speed': ['V4', 'm/sec'], 
+            "cycle_time": ["cycletime value (sec)", "sec"]}
+
+def update_date_path() -> str:
+    #Connect to database
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur  = conn.cursor()
+
+    cur.execute("SELECT MAX(created_at) FROM part")
+    last_date = cur.fetchone()[0]
+    # Fall back to a default if the table is empty
+    if last_date is None:
+        date_from = "2026-01-01"
+    else:
+        date_from = last_date.strftime("%Y-%m-%d")
+
+    date_to = date.today().strftime("%Y-%m-%d")
+
+    data_path = f"/reports/report/data?dateFrom={date_from}&dateTo={date_to}"
+    return data_path
+
+def get_auth_token() -> str:
+    """Step 1: POST credentials, pull the token out of the JSON response."""
+    url = f"{BASE_URL}{AUTH_PATH}"
+    payload = {"username": USERNAME, "password": PASSWORD}
+ 
+    resp = requests.post(url, json=payload, timeout=15)
+    resp.raise_for_status()
+    body = resp.json()
+ 
+    token = body
+    for key in TOKEN_JSON_PATH.split("."):
+        token = token[key]
+ 
+    if not isinstance(token, str):
+        raise ValueError(f"Expected a string token at '{TOKEN_JSON_PATH}', got: {token!r}")
+    return token
+
+def get_iot_data(token: str):
+    """Step 2: GET the data endpoint using the token from step 1."""
+    url = f"{BASE_URL}{DATA_PATH}"
+    headers = {"Authorization": f"Bearer {token}"}
+ 
+    resp = requests.get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+    last_record = data['rows'][0]
+    last_plc_data = last_record['plcReading']
+    print(last_plc_data)
+    last_params = {IOT_NAMES_UOM[d][0]:v for d , v in last_plc_data.items() if d in IOT_NAMES_UOM}
+    print(last_params.keys())
+    return 
+
+def monitor_data():
+    #Connect to database
+    conn = psycopg2.connect(**DB_CONFIG)
+
+    query = """
+        SELECT c.*
+        FROM operating_parameter c
+        WHERE c.id_part = (
+        SELECT id_part FROM part
+        ORDER BY id_part DESC
+        LIMIT 1
+    );
+
+    """
+    df_raw = pd.read_sql(query, conn)
+    df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
+    df.columns = df.columns.str.strip()
+
+    X = pd.DataFrame(index=df.index)
+    for target_col in PARAM_COLS:
+        source_col = PARAM_MAP[target_col]
+        X[target_col] = df[source_col]
+
+    parameters = X.iloc[0].to_dict()
+    last_params = {PARAM_MAP[d]:v for d , v in parameters.items()}
+    print(last_params)
+    return last_params
+
 def predictions():
 
     #Connect to database
@@ -169,16 +242,22 @@ def predictions():
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
     df.columns = df.columns.str.strip()
 
-    param_names = [col for col in df.columns if col not in ["id_part", "id_die"]]
+    #param_names = [col for col in df.columns if col not in ["id_part", "id_die"]]
     #print(param_names)
+
+    
     
     X = pd.DataFrame(index=df.index)
     for target_col in PARAM_COLS:
         source_col = PARAM_MAP[target_col]
         X[target_col] = df[source_col]
 
-    param_names = [col for col in X.columns if col not in ["id_part", "id_die"]]
+    #param_names = [col for col in X.columns if col not in ["id_part", "id_die"]]
     #print(param_names)
+
+    # parameters = X.iloc[0].to_dict()
+    # last_params = {PARAM_MAP[d]:v for d , v in parameters.items()}
+    # print(last_params)
 
     query = """
         SELECT c.parameter_name, c.baseline, c.upper_tolerance, c.lower_tolerance
