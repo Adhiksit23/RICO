@@ -12,13 +12,12 @@ except: os.system("pip install xgboost -q"); from xgboost import XGBClassifier
 warnings.filterwarnings("ignore")
 import psycopg2
 import pickle
-from datetime import date
+from datetime import date, timedelta
 import requests
-
+from .data_processing import process_data
 
 BASE_URL = "http://192.168.100.137:9090/api/v1"
 AUTH_PATH = "/auth/login"
-DATA_PATH = "/reports/report/data?dateFrom=2026-06-01&dateTo=2026-06-08"
  
 USERNAME = "sanjeev"
 PASSWORD = "Sanjeev@rico123"
@@ -151,13 +150,12 @@ def update_date_path() -> str:
     cur.execute("SELECT MAX(created_at) FROM part")
     last_date = cur.fetchone()[0]
     # Fall back to a default if the table is empty
-    if last_date is None:
-        date_from = "2026-01-01"
-    else:
-        date_from = last_date.strftime("%Y-%m-%d")
+   
+    date_from = date.today().strftime("%Y-%m-%d")
+    date_to = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    date_to = date.today().strftime("%Y-%m-%d")
-
+    # date_from = "2026-06-25"
+    # date_to = "2026-06-27"
     data_path = f"/reports/report/data?dateFrom={date_from}&dateTo={date_to}"
     return data_path
 
@@ -178,20 +176,48 @@ def get_auth_token() -> str:
         raise ValueError(f"Expected a string token at '{TOKEN_JSON_PATH}', got: {token!r}")
     return token
 
-def get_iot_data(token: str):
+def get_iot_data(token: str, data_path):
     """Step 2: GET the data endpoint using the token from step 1."""
-    url = f"{BASE_URL}{DATA_PATH}"
+    url = f"{BASE_URL}{data_path}"
     headers = {"Authorization": f"Bearer {token}"}
  
     resp = requests.get(url, headers=headers, timeout=15)
     resp.raise_for_status()
     data = resp.json()
-    last_record = data['rows'][0]
-    last_plc_data = last_record['plcReading']
-    print(last_plc_data)
-    last_params = {IOT_NAMES_UOM[d][0]:v for d , v in last_plc_data.items() if d in IOT_NAMES_UOM}
-    print(last_params.keys())
-    return 
+    if len(data['rows']) != 0:
+        last_record = data['rows'][0]
+        process_data(last_record)
+    
+    return
+
+
+def get_latest_calibration(machine: str = None, die: str = None):
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur  = conn.cursor()
+
+    print(die)
+    
+    query = """
+            SELECT c.parameter_name, c.baseline, c.upper_tolerance, c.lower_tolerance
+            FROM calibration_parameter c
+            WHERE c.id_calibration = (
+            SELECT id_calibration FROM die_calibration
+            WHERE id_die = %s
+            ORDER BY id_calibration DESC
+            LIMIT 1
+        );
+
+        """
+
+    df_baselines = pd.read_sql(query, conn, params=(die,))
+    
+    baselines = df_baselines.set_index('parameter_name').to_dict(orient='index')
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return baselines
 
 def monitor_data():
     #Connect to database
@@ -210,6 +236,7 @@ def monitor_data():
     df_raw = pd.read_sql(query, conn)
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
     df.columns = df.columns.str.strip()
+    die_id = df.index.get_level_values("id_die")[0]
 
     X = pd.DataFrame(index=df.index)
     for target_col in PARAM_COLS:
@@ -218,8 +245,8 @@ def monitor_data():
 
     parameters = X.iloc[0].to_dict()
     last_params = {PARAM_MAP[d]:v for d , v in parameters.items()}
-    print(last_params)
-    return last_params
+    #print(last_params)
+    return [last_params, die_id]
 
 def predictions():
 
@@ -241,37 +268,34 @@ def predictions():
 
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
     df.columns = df.columns.str.strip()
-
-    #param_names = [col for col in df.columns if col not in ["id_part", "id_die"]]
-    #print(param_names)
-
-    
+    die_id = df.index.get_level_values("id_die")[0]
+    print(die_id)
     
     X = pd.DataFrame(index=df.index)
     for target_col in PARAM_COLS:
         source_col = PARAM_MAP[target_col]
         X[target_col] = df[source_col]
 
-    #param_names = [col for col in X.columns if col not in ["id_part", "id_die"]]
-    #print(param_names)
-
-    # parameters = X.iloc[0].to_dict()
-    # last_params = {PARAM_MAP[d]:v for d , v in parameters.items()}
-    # print(last_params)
+    # print("Param Names DB")
+    # param_names = [col for col in X.columns if col not in ["id_part", "id_die"]]
+    # print(param_names)
 
     query = """
         SELECT c.parameter_name, c.baseline, c.upper_tolerance, c.lower_tolerance
         FROM calibration_parameter c
         WHERE c.id_calibration = (
         SELECT id_calibration FROM die_calibration
+        WHERE id_die = %s
         ORDER BY id_calibration DESC
         LIMIT 1
     );
 
     """
 
-    df_baselines = pd.read_sql(query, conn)
+    df_baselines = pd.read_sql(query, conn, params=(die_id,))
+    #Temporary, will be removed after retraining model to so that it uses all parameters rather than having remove conditions
     df_baselines = df_baselines[df_baselines["parameter_name"] != "DIE-CLOSE CORE IN TIME"]
+
     baselines = df_baselines.set_index('parameter_name').to_dict(orient='index')
     
 

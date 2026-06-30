@@ -136,19 +136,19 @@ def get_latest_parameters(machine: str = None, die: str = None):
     conn = psycopg2.connect(**DB_CONFIG)
     cur  = conn.cursor()
 
-    # NOTE: Currently this grabs the absolute latest calibration globally. 
-    # If you have multiple machines/dies, you should eventually update this SQL 
-    # to filter by id_machine and id_die!
+    print(die)
+    
     query = """
         SELECT c.parameter_name, c.baseline
         FROM calibration_parameter c
         WHERE c.id_calibration = (
             SELECT id_calibration FROM die_calibration
+            WHERE id_die = %s
             ORDER BY id_calibration DESC
             LIMIT 1
         );
     """
-    df = pd.read_sql(query, conn)
+    df = pd.read_sql(query, conn, params=(die,))
     
     # Return a clean dictionary of { "Param Name": baseline_value }
     result = {
@@ -189,7 +189,7 @@ def compute_calibration_ranges(die):
     }
 
 
-def apply_calibration(data: dict, die: str = "S14"): # FIX: Changed default to S14
+def apply_calibration(data: dict, die: str):
     conn = psycopg2.connect(**DB_CONFIG)
     cur  = conn.cursor()
 
