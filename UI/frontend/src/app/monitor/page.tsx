@@ -1,9 +1,266 @@
+// "use client";
+
+// import { useEffect, useState } from "react";
+// import GaugeCard from "@/components/GaugeCard";
+// import ParameterGauge from "@/components/ParameterGauge";
+
+// // 1 & 2. Accurate mapping dictionary aligned exactly with your teammate's backend response
+// const parameterMap = [
+//   { label: "Cooling Time", key: "CURING TIME", unit: "s" },
+//   { label: "Spray Time", key: "SPRAY TIME", unit: "s" },
+//   { label: "Speed 2", key: "V2", unit: "m/s" },
+//   { label: "Speed 4", key: "V4", unit: "m/s" },
+//   { label: "Acc Position", key: "ACCEL. POINT", unit: "mm" },
+//   { label: "Deacc Position", key: "DEACEL. POINT", unit: "mm" },
+//   { label: "Intensification Time", key: "INTEN. TIME", unit: "msec" },
+//   { label: "Metal Pressure", key: "METAL PRESS.", unit: "MPa" },
+//   { label: "Biscuit Thickness", key: "BISCUIT THICKNESS", unit: "mm" },
+//   { label: "Clamp Force", key: "CLAMP FORCE", unit: "%" },
+//   { label: "Metal Temperature", key: "FURNACE METAL TEMP.", unit: "°C" },
+// ];
+
+// export default function MonitorPage() {
+//   const [predictionData, setPredictionData] = useState({
+//     non_filling: 0,
+//     blowhole: 0,
+//     porosity: 0,
+//     crack: 0,
+//     shrinkage: 0,
+//     chipoff: 0,
+//   });
+
+//   // 5. Clean array-ready initialization to avoid conditional null checking bloat
+//   const [monitorData, setMonitorData] = useState<any[]>([]);
+
+//   useEffect(() => {
+//     const fetchData = () => {
+//       Promise.all([
+//         fetch("http://127.0.0.1:8000/api/predictor/predict").then((res) => res.json()),
+//         fetch("http://127.0.0.1:8000/api/predictor/monitor").then((res) => res.json()),
+//       ])
+//         .then(([predictRes, monitorRes]) => {
+//           setPredictionData(predictRes);
+//           setMonitorData(monitorRes);
+//         })
+//         .catch((err) => {
+//           console.error("Error fetching dashboard data:", err);
+//         });
+//     };
+
+//     fetchData();
+
+//     // Refresh every 1 minute
+//     const interval = setInterval(fetchData, 60000);
+
+//     return () => clearInterval(interval);
+//   }, []);
+
+//   const getPredictionStatus = (value: number) => {
+//     if (value < 10) return { status: "LOW", color: "#22C55E" };
+//     if (value <= 50) return { status: "MED", color: "#F59E0B" };
+//     return { status: "HIGH", color: "#EF4444" };
+//   };
+
+//   const predictions = [
+//     {
+//       label: "Non-filling",
+//       subtitle: "Incomplete cavity fill",
+//       value: predictionData.non_filling,
+//       ...getPredictionStatus(predictionData.non_filling),
+//     },
+//     {
+//       label: "Blowhole",
+//       subtitle: "Trapped gas cavities",
+//       value: predictionData.blowhole,
+//       ...getPredictionStatus(predictionData.blowhole),
+//     },
+//     {
+//       label: "Porosity",
+//       subtitle: "Micro voids in structure",
+//       value: predictionData.porosity,
+//       ...getPredictionStatus(predictionData.porosity),
+//     },
+//     {
+//       label: "Shrinkage",
+//       subtitle: "Volumetric contraction",
+//       value: predictionData.shrinkage,
+//       ...getPredictionStatus(predictionData.shrinkage),
+//     },
+//     {
+//       label: "Chip-off",
+//       subtitle: "Surface fragment loss",
+//       value: predictionData.chipoff,
+//       ...getPredictionStatus(predictionData.chipoff),
+//     },
+//     {
+//       label: "Crack",
+//       subtitle: "Structural fracture lines",
+//       value: predictionData.crack,
+//       ...getPredictionStatus(predictionData.crack),
+//     },
+//   ];
+
+//   // Map backend telemetry payload onto parameters UI cleanly
+//   const raw = monitorData[0];
+//   const calibration = monitorData[1];
+//   const isDataLoaded = !!(raw && calibration);
+
+//   const parameters = isDataLoaded
+//     ? parameterMap.map((item) => {
+//         const value = raw[item.key] ?? 0;
+//         const range = calibration[item.key] || { lower_tolerance: 0, upper_tolerance: 0 };
+//         const isOk = value >= range.lower_tolerance && value <= range.upper_tolerance;
+
+//         return {
+//           name: item.label,
+//           value: `${value} ${item.unit}`,
+//           tolerance: `${range.lower_tolerance.toFixed(2)} - ${range.upper_tolerance.toFixed(2)} ${item.unit}`,
+//           status: isOk ? "OK" : "FAIL",
+//         };
+//       })
+//     : [];
+
+//   // Dynamic parameters count
+//   const totalParamsCount = parameters.length;
+//   const okCount = parameters.filter((p) => p.status === "OK").length;
+
+//   return (
+//     <div className="bg-[#0B1120] min-h-screen text-white px-6 py-5">
+//       {/* Header */}
+//       <div className="flex justify-between items-start mb-5">
+//         <div>
+//           <h1 className="text-[38px] font-bold leading-none">
+//             Die Casting Process Monitor
+//           </h1>
+//           <p className="text-gray-500 mt-2 text-sm">
+//             Live IoT parameters • Post-cast defect prediction
+//           </p>
+//         </div>
+
+//         {/* Right Info */}
+//         <div className="flex gap-8 text-right mt-1">
+//           <div>
+//             <div className="text-gray-500 text-[10px] uppercase tracking-[2px]">
+//               Part ID
+//             </div>
+//             <div className="text-cyan-400 font-semibold text-sm mt-1">
+//               DC-2026-47905
+//             </div>
+//           </div>
+
+//           <div>
+//             <div className="text-gray-500 text-[10px] uppercase tracking-[2px]">
+//               Timestamp
+//             </div>
+//             {/* 3. Intentionally hardcoded until teammate provides an endpoint timestamp field */}
+//             <div className="text-white text-sm mt-1">
+//               4/30/2026 6:51:13 AM
+//             </div>
+//           </div>
+
+//           <div>
+//             <div className="text-gray-500 text-[10px] uppercase tracking-[2px]">
+//               Verdict
+//             </div>
+//             {/* 4. Maintained layout design with explicit REJECT until backend architecture is clear */}
+//             <div className="text-red-400 font-semibold text-sm mt-1">
+//               REJECT
+//             </div>
+//           </div>
+
+//           <div>
+//             <div className="text-gray-500 text-[10px] uppercase tracking-[2px]">
+//               Params
+//             </div>
+//             {/* Dynamic counter remains operational */}
+//             <div className="text-yellow-400 font-semibold text-sm mt-1">
+//               {isDataLoaded ? `${okCount}/${totalParamsCount} OK` : "0/0 OK"}
+//             </div>
+//           </div>
+
+//           <div className="w-3 h-3 bg-green-400 rounded-full mt-6" />
+//         </div>
+//       </div>
+
+//       {/* Prediction Header */}
+//       <div className="mb-3">
+//         <h2 className="text-[15px] font-semibold uppercase tracking-[2px]">
+//           POST-CAST DEFECT PREDICTION
+//         </h2>
+//         <p className="text-gray-500 text-xs mt-1">
+//           Top 6 defect modes • AI-inferred from upstream parameters
+//         </p>
+//       </div>
+
+//       {/* Prediction Cards */}
+//       <div className="grid grid-cols-6 gap-4 mb-6">
+//         {predictions.map((item) => (
+//           <GaugeCard
+//             key={item.label}
+//             label={item.label}
+//             subtitle={item.subtitle}
+//             value={item.value}
+//             status={item.status}
+//             color={item.color}
+//           />
+//         ))}
+//       </div>
+
+//       {/* Parameters Header */}
+//       <div className="mb-3">
+//         <h2 className="text-[15px] font-semibold uppercase tracking-[2px]">
+//           LIVE PROCESS PARAMETERS
+//         </h2>
+//         <p className="text-gray-500 text-xs mt-1">
+//           {isDataLoaded ? totalParamsCount : 0} key parameters monitored against tolerance limits
+//         </p>
+//       </div>
+
+//       {/* Parameters Grid */}
+//       <div className="grid grid-cols-4 gap-4">
+//         {isDataLoaded ? (
+//           parameters.map((item) => (
+//             <ParameterGauge
+//               key={item.name}
+//               name={item.name}
+//               value={item.value}
+//               tolerance={item.tolerance}
+//               status={item.status}
+//             />
+//           ))
+//         ) : (
+//           <div className="col-span-4 text-center py-6 text-gray-500 text-sm">
+//             Loading real-time parameter data...
+//           </div>
+//         )}
+//       </div>
+
+//       {/* Footer */}
+//       <div className="text-center text-gray-500 text-xs mt-5">
+//         Data refreshes every 1 minute • Simulated IoT feed
+//       </div>
+//     </div>
+//   );
+// }
 "use client";
 
 import { useEffect, useState } from "react";
-
 import GaugeCard from "@/components/GaugeCard";
 import ParameterGauge from "@/components/ParameterGauge";
+
+const parameterMap = [
+  { label: "Cooling Time", key: "CURING TIME", unit: "s" },
+  { label: "Spray Time", key: "SPRAY TIME", unit: "s" },
+  { label: "Speed 2", key: "V2", unit: "m/s" },
+  { label: "Speed 4", key: "V4", unit: "m/s" },
+  { label: "Acc Position", key: "ACCEL. POINT", unit: "mm" },
+  { label: "Deacc Position", key: "DEACEL. POINT", unit: "mm" },
+  { label: "Intensification Time", key: "INTEN. TIME", unit: "msec" },
+  { label: "Metal Pressure", key: "METAL PRESS.", unit: "MPa" },
+  { label: "Biscuit Thickness", key: "BISCUIT THICKNESS", unit: "mm" },
+  { label: "Clamp Force", key: "CLAMP FORCE", unit: "%" },
+  { label: "Metal Temperature", key: "FURNACE METAL TEMP.", unit: "°C" },
+];
 
 export default function MonitorPage() {
   const [predictionData, setPredictionData] = useState({
@@ -12,228 +269,133 @@ export default function MonitorPage() {
     porosity: 0,
     crack: 0,
     shrinkage: 0,
-    chipoff: 0
+    chipoff: 0,
   });
 
-  // useEffect(() => {
-  //   fetch("http://127.0.0.1:8000/api/predictor/predict")
-  //     .then((res) => res.json())
-  //     .then((data) => {
-  //       setPredictionData(data);
-  //     })
-  //     .catch((err) => {
-  //       console.error(err);
-  //     });
-  // }, []);
+  const [monitorData, setMonitorData] = useState<any[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-  const fetchPredictionData = () => {
-    fetch("http://127.0.0.1:8000/api/predictor/predict")
-      .then((res) => res.json())
-      .then((data) => {
-        setPredictionData(data);
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  };
+    const fetchData = async () => {
+      setIsUpdating(true);
 
-  // Initial fetch
-  fetchPredictionData();
+      // 1. Await update and verify HTTP response success before pulling down current state
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/predictor/update");
+        
+        if (!response.ok) {
+          throw new Error(`Update endpoint returned status: ${response.status}`);
+        }
+      } catch (err) {
+        console.warn("IoT update failed:", err);
+      }
 
-  // Refresh every 5 seconds
-  const interval = setInterval(fetchPredictionData, 60000);
+      // 2. Query UI dashboard telemetry payloads sequentially from backend database
+      try {
+        const [predictRes, monitorRes] = await Promise.all([
+          fetch("http://127.0.0.1:8000/api/predictor/predict").then((res) => res.json()),
+          fetch("http://127.0.0.1:8000/api/predictor/monitor").then((res) => res.json()),
+        ]);
 
-  return () => clearInterval(interval);
-}, []);
+        setPredictionData(predictRes);
+        setMonitorData(monitorRes);
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+      } finally {
+        setIsUpdating(false);
+      }
+    };
+
+    fetchData();
+
+    // Set interval loop to trigger cycle every 1 minute
+    const interval = setInterval(fetchData, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const getPredictionStatus = (value: number) => {
-  if (value < 10) {
-    return {
-      status: "LOW",
-      color: "#22C55E", // Green
-    };
-  }
-
-  if (value <= 50) {
-    return {
-      status: "MED",
-      color: "#F59E0B", // Orange
-    };
-  }
-
-  return {
-    status: "HIGH",
-    color: "#EF4444", // Red
+    if (value < 10) return { status: "LOW", color: "#22C55E" };
+    if (value <= 50) return { status: "MED", color: "#F59E0B" };
+    return { status: "HIGH", color: "#EF4444" };
   };
-};
 
-  // const predictions = [
-  //   {
-  //     label: "Non-filling",
-  //     subtitle: "Incomplete cavity fill",
-  //     value: predictionData.non_filling,
-  //     status: "HIGH",
-  //     color: "#EF4444",
-  //   },
-  //   {
-  //     label: "Blowhole",
-  //     subtitle: "Trapped gas cavities",
-  //     value: predictionData.blowhole,
-  //     status: "LOW",
-  //     color: "#22C55E",
-  //   },
-  //   {
-  //     label: "Porosity",
-  //     subtitle: "Micro voids in structure",
-  //     value: predictionData.porosity,
-  //     status: "MED",
-  //     color: "#F59E0B",
-  //   },
-  //   {
-  //     label: "Shrinkage",
-  //     subtitle: "Volumetric contraction",
-  //     value: 23.5,
-  //     status: "LOW",
-  //     color: "#22C55E",
-  //   },
-  //   {
-  //     label: "Chip-off",
-  //     subtitle: "Surface fragment loss",
-  //     value: 10.1,
-  //     status: "LOW",
-  //     color: "#22C55E",
-  //   },
-  //   {
-  //     label: "Crack",
-  //     subtitle: "Structural fracture lines",
-  //     value: 31.2,
-  //     status: "MED",
-  //     color: "#F59E0B",
-  //   },
-  // ];
   const predictions = [
-  {
-    label: "Non-filling",
-    subtitle: "Incomplete cavity fill",
-    value: predictionData.non_filling,
-    ...getPredictionStatus(predictionData.non_filling),
-  },
-  {
-    label: "Blowhole",
-    subtitle: "Trapped gas cavities",
-    value: predictionData.blowhole,
-    ...getPredictionStatus(predictionData.blowhole),
-  },
-  {
-    label: "Porosity",
-    subtitle: "Micro voids in structure",
-    value: predictionData.porosity,
-    ...getPredictionStatus(predictionData.porosity),
-  },
-  {
-    label: "Shrinkage",
-    subtitle: "Volumetric contraction",
-    value: predictionData.shrinkage,
-    ...getPredictionStatus(predictionData.shrinkage),
-  },
-  {
-    label: "Chip-off",
-    subtitle: "Surface fragment loss",
-    value: predictionData.chipoff,
-    ...getPredictionStatus(predictionData.chipoff),
-  },
-  {
-    label: "Crack",
-    subtitle: "Structural fracture lines",
-    value: predictionData.crack,
-    ...getPredictionStatus(predictionData.crack),
-  },
-];
-  const parameters = [
     {
-      name: "Cooling Time",
-      value: "13.7 s",
-      tolerance: "13.6 - 14 s",
-      status: "OK",
+      label: "Non-filling",
+      subtitle: "Incomplete cavity fill",
+      value: predictionData.non_filling,
+      ...getPredictionStatus(predictionData.non_filling),
     },
     {
-      name: "Spray Time",
-      value: "14.5 s",
-      tolerance: "14.3 - 15.1 s",
-      status: "OK",
+      label: "Blowhole",
+      subtitle: "Trapped gas cavities",
+      value: predictionData.blowhole,
+      ...getPredictionStatus(predictionData.blowhole),
     },
     {
-      name: "Speed 2",
-      value: "0.31 m/s",
-      tolerance: "0.3 - 0.32 m/s",
-      status: "OK",
+      label: "Porosity",
+      subtitle: "Micro voids in structure",
+      value: predictionData.porosity,
+      ...getPredictionStatus(predictionData.porosity),
     },
     {
-      name: "Speed 4",
-      value: "3.37 m/s",
-      tolerance: "3.35 - 3.39 m/s",
-      status: "OK",
+      label: "Shrinkage",
+      subtitle: "Volumetric contraction",
+      value: predictionData.shrinkage,
+      ...getPredictionStatus(predictionData.shrinkage),
     },
     {
-      name: "Acc Position",
-      value: "226.6 mm",
-      tolerance: "264 - 270 mm",
-      status: "FAIL",
+      label: "Chip-off",
+      subtitle: "Surface fragment loss",
+      value: predictionData.chipoff,
+      ...getPredictionStatus(predictionData.chipoff),
     },
     {
-      name: "Deacc Position",
-      value: "701.1 mm",
-      tolerance: "696 - 710 mm",
-      status: "OK",
-    },
-    {
-      name: "Intensification Time",
-      value: "57.9 s",
-      tolerance: "53 - 77 s",
-      status: "OK",
-    },
-    {
-      name: "Metal Pressure",
-      value: "66.4 MPa",
-      tolerance: "65 - 67 MPa",
-      status: "OK",
-    },
-    {
-      name: "Biscuit Thickness",
-      value: "21.6 mm",
-      tolerance: "21 - 26 mm",
-      status: "OK",
-    },
-    {
-      name: "Clamp Force",
-      value: "100.0 %",
-      tolerance: "97 - 103 %",
-      status: "OK",
-    },
-    {
-      name: "Metal Temperature",
-      value: "661.0 °C",
-      tolerance: "654 - 663 °C",
-      status: "OK",
-    },
-    {
-      name: "Fixed Die Temp F-1",
-      value: "205.3 °C",
-      tolerance: "180 - 280 °C",
-      status: "OK",
+      label: "Crack",
+      subtitle: "Structural fracture lines",
+      value: predictionData.crack,
+      ...getPredictionStatus(predictionData.crack),
     },
   ];
+
+  const raw = monitorData[0];
+  const calibration = monitorData[1];
+  const isDataLoaded = !!(raw && calibration);
+
+  const parameters = isDataLoaded
+    ? parameterMap.map((item) => {
+        const value = raw[item.key] ?? 0;
+        const range = calibration[item.key] || { lower_tolerance: 0, upper_tolerance: 0 };
+        const isOk = value >= range.lower_tolerance && value <= range.upper_tolerance;
+
+        return {
+          name: item.label,
+          value: `${value} ${item.unit}`,
+          tolerance: `${range.lower_tolerance.toFixed(2)} - ${range.upper_tolerance.toFixed(2)} ${item.unit}`,
+          status: isOk ? "OK" : "FAIL",
+        };
+      })
+    : [];
+
+  const totalParamsCount = parameters.length;
+  const okCount = parameters.filter((p) => p.status === "OK").length;
 
   return (
     <div className="bg-[#0B1120] min-h-screen text-white px-6 py-5">
       {/* Header */}
       <div className="flex justify-between items-start mb-5">
         <div>
-          <h1 className="text-[38px] font-bold leading-none">
-            Die Casting Process Monitor
-          </h1>
-
+          <div className="flex items-center gap-3">
+            <h1 className="text-[38px] font-bold leading-none">
+              Die Casting Process Monitor
+            </h1>
+            {isUpdating && (
+              <span className="text-xs bg-cyan-950 text-cyan-400 border border-cyan-800 px-2 py-0.5 rounded animate-pulse mt-1">
+                Updating IoT Data...
+              </span>
+            )}
+          </div>
           <p className="text-gray-500 mt-2 text-sm">
             Live IoT parameters • Post-cast defect prediction
           </p>
@@ -245,7 +407,6 @@ export default function MonitorPage() {
             <div className="text-gray-500 text-[10px] uppercase tracking-[2px]">
               Part ID
             </div>
-
             <div className="text-cyan-400 font-semibold text-sm mt-1">
               DC-2026-47905
             </div>
@@ -255,7 +416,6 @@ export default function MonitorPage() {
             <div className="text-gray-500 text-[10px] uppercase tracking-[2px]">
               Timestamp
             </div>
-
             <div className="text-white text-sm mt-1">
               4/30/2026 6:51:13 AM
             </div>
@@ -265,7 +425,6 @@ export default function MonitorPage() {
             <div className="text-gray-500 text-[10px] uppercase tracking-[2px]">
               Verdict
             </div>
-
             <div className="text-red-400 font-semibold text-sm mt-1">
               REJECT
             </div>
@@ -275,9 +434,8 @@ export default function MonitorPage() {
             <div className="text-gray-500 text-[10px] uppercase tracking-[2px]">
               Params
             </div>
-
             <div className="text-yellow-400 font-semibold text-sm mt-1">
-              15/16 OK
+              {isDataLoaded ? `${okCount}/${totalParamsCount} OK` : "0/0 OK"}
             </div>
           </div>
 
@@ -290,7 +448,6 @@ export default function MonitorPage() {
         <h2 className="text-[15px] font-semibold uppercase tracking-[2px]">
           POST-CAST DEFECT PREDICTION
         </h2>
-
         <p className="text-gray-500 text-xs mt-1">
           Top 6 defect modes • AI-inferred from upstream parameters
         </p>
@@ -315,28 +472,33 @@ export default function MonitorPage() {
         <h2 className="text-[15px] font-semibold uppercase tracking-[2px]">
           LIVE PROCESS PARAMETERS
         </h2>
-
         <p className="text-gray-500 text-xs mt-1">
-          16 key parameters monitored against tolerance limits
+          {isDataLoaded ? totalParamsCount : 0} key parameters monitored against tolerance limits
         </p>
       </div>
 
       {/* Parameters Grid */}
       <div className="grid grid-cols-4 gap-4">
-        {parameters.map((item) => (
-          <ParameterGauge
-            key={item.name}
-            name={item.name}
-            value={item.value}
-            tolerance={item.tolerance}
-            status={item.status}
-          />
-        ))}
+        {isDataLoaded ? (
+          parameters.map((item) => (
+            <ParameterGauge
+              key={item.name}
+              name={item.name}
+              value={item.value}
+              tolerance={item.tolerance}
+              status={item.status}
+            />
+          ))
+        ) : (
+          <div className="col-span-4 text-center py-6 text-gray-500 text-sm">
+            Performing primary telemetry fetch sequence...
+          </div>
+        )}
       </div>
 
       {/* Footer */}
       <div className="text-center text-gray-500 text-xs mt-5">
-        Data refreshes every 5 seconds • Simulated IoT feed
+        Data refreshes every 1 minute • Simulated IoT feed
       </div>
     </div>
   );

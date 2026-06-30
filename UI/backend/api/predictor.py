@@ -37,13 +37,14 @@ def predict():
 def monitor():
 
     data, die_id = monitor_data()
-    ranges = get_latest_calibration(die_id)
+    #print(die_id)
+    ranges = get_latest_calibration(die = die_id)
+    #print([data, ranges])
     return [data, ranges]
 
 
 @router.get("/update")
 def update():
-    print("Authenticating...")
     data_path = update_date_path()
     print(data_path)
     
