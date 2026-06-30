@@ -136,7 +136,7 @@ def get_latest_parameters(machine: str = None, die: str = None):
     conn = psycopg2.connect(**DB_CONFIG)
     cur  = conn.cursor()
 
-    print(die)
+    # print(die)
     
     query = """
         SELECT c.parameter_name, c.baseline
@@ -164,10 +164,13 @@ def get_latest_parameters(machine: str = None, die: str = None):
     return result
 
 
-def compute_calibration_ranges(die):
+def compute_calibration_ranges(
+    machine: str | None = None,
+    die: str | None = "S14"
+    ):
     print("starting compute ranges")
     print(die)
-    baselines, num_samples = calibrate_params.main(die)
+    baselines, num_samples = calibrate_params.main(machine, die = die)
     
     vals = {
         name: {
@@ -180,7 +183,7 @@ def compute_calibration_ranges(die):
         for name, v in baselines.items()
     }
     # vals["ACCEL. POINT"]["baseline"] = 0
-    print(vals["ACCEL. POINT"])
+    #print(vals["ACCEL. POINT"])
     
     return {
         "ranges": vals,

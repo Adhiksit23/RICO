@@ -144,14 +144,15 @@ def latest_parameters(
     machine: str | None = None,
     die: str | None = None
 ):
-    return get_latest_parameters(die)
+    return get_latest_parameters(die = die)
 
 @router.get("/ranges")
 def calibration_ranges(
     machine: str | None = None,
     die: str | None = "S14"
 ):
-    return compute_calibration_ranges(die)
+    print(machine)
+    return compute_calibration_ranges(machine, die)
 
 @router.post("/update")
 def update_calibration(data: ParameterUpdate):
