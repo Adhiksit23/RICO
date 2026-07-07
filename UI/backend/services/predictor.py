@@ -259,6 +259,7 @@ def monitor_data():
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
     df.columns = df.columns.str.strip()
     die_id = df.index.get_level_values("id_die")[0]
+    part_id = df.index.get_level_values("id_part")[0]
 
     X = pd.DataFrame(index=df.index)
     for target_col in PARAM_COLS:
@@ -267,6 +268,9 @@ def monitor_data():
 
     parameters = X.iloc[0].to_dict()
     last_params = {PARAM_MAP[d]:v for d , v in parameters.items()}
+    last_params["part_id"] = part_id
+    last_params["timestamp"] = "2026-07-03T19:42:11"
+    last_params["verdict"] = "REJECT"
     #print(last_params)
     return [last_params, die_id]
 

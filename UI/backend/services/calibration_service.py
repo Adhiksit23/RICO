@@ -136,10 +136,11 @@ def get_latest_parameters(machine: str = None, die: str = None):
     conn = psycopg2.connect(**DB_CONFIG)
     cur  = conn.cursor()
 
-    # print(die)
-    
+    print(die)
+    df_check = pd.read_sql("SELECT * FROM die_calibration", conn)
+    #print(df_check)
     query = """
-        SELECT c.parameter_name, c.baseline
+        SELECT c.*
         FROM calibration_parameter c
         WHERE c.id_calibration = (
             SELECT id_calibration FROM die_calibration
@@ -148,18 +149,34 @@ def get_latest_parameters(machine: str = None, die: str = None):
             LIMIT 1
         );
     """
+
     df = pd.read_sql(query, conn, params=(die,))
     
-    # Return a clean dictionary of { "Param Name": baseline_value }
-    result = {
-       
-        row["parameter_name"]: float(row["baseline"])
-        for _, row in df.iterrows()
-    }
-    
+    # query = """
+    #     SELECT c.parameter_name, c.baseline, c.upper_tolerance, c.lower_tolerance
+    #     FROM calibration_parameter c
+    #     WHERE c.id_calibration = %s;
+
+    # """
+
+    # df = pd.read_sql(query, conn, params=(24,))
+
     conn.commit()
     cur.close()
     conn.close()
+    #print(df)
+    # Return a clean dictionary of { "Param Name": baseline_value }
+    result = {
+        row["parameter_name"]: {
+       
+        "baseline": float(row["baseline"]),
+        "min_range": float(row["lower_tolerance"]),
+        "max_range": float(row["upper_tolerance"])
+        } for _, row in df.iterrows()
+    }
+    
+    #print(result)
+   
     
     return result
 
@@ -168,8 +185,8 @@ def compute_calibration_ranges(
     machine: str | None = None,
     die: str | None = "S14"
     ):
-    print("starting compute ranges")
-    print(die)
+    # print("starting compute ranges")
+    # print(die)
     baselines, num_samples = calibrate_params.main(machine, die = die)
     
     vals = {
