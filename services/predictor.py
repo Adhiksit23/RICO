@@ -14,6 +14,7 @@ import pickle
 from datetime import date, timedelta
 import requests
 from .data_processing import process_data
+import os
 
 BASE_URL = "http://192.168.100.136:9090/api/v1"
 AUTH_PATH = "/auth/login"
@@ -375,7 +376,9 @@ def predictions():
     # Use latest model for each die, 
     for defect in TARGET_DEFECTS:
         defect_tag   = defect.replace(" ", "_")
-        model = pickle.load(open(f'.\models\{defect_tag}_20260605_voting.pkl','rb'))
+        model_path = os.path.join('.', 'models', f'{defect_tag}_20260605_voting.pkl')
+        model = pickle.load(open(model_path, 'rb'))
+        #model = pickle.load(open(f'.\models\{defect_tag}_20260605_voting.pkl','rb'))
         #print(model.keys())
         #print("Expected by model:", model['scaler'].feature_names_in_.tolist())
         #print("Received in input:", feat_datasets[defect].columns.tolist())
