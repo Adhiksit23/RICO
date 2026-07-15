@@ -224,20 +224,14 @@ def get_latest_calibration(machine: str = None, die: str = None):
 
     """
 
-    df_baselines = pd.read_sql(query, conn, params=(24,))
+    df_baselines = pd.read_sql(query, conn, params=('33',))
     
     baselines = df_baselines.set_index('parameter_name').to_dict(orient='index')
-    baselines = {PARAM_MAP[k]:v for k, v in baselines.items()}
+
+    #baselines = {PARAM_MAP_BL[k]:v for k, v in baselines.items()}
+    baselines = {k:v for k, v in baselines.items()}
     
-    # baselines['V2']['lower_tolerance'] = 0.315
-    # baselines['V2']['upper_tolerance'] = 0.322
-
-    # baselines['V4']['lower_tolerance'] = 3.327
-    # baselines['V4']['upper_tolerance'] = 3.426
-
-    # baselines['V4']['lower_tolerance'] = 3.327
-    # baselines['V4']['upper_tolerance'] = 3.426
-    print(baselines['V2'].keys())
+    #print(baselines['V2'].keys())
     print(baselines.keys())
     conn.commit()
     cur.close()
@@ -252,16 +246,17 @@ def monitor_data():
     query = """
         SELECT c.*
         FROM operating_parameter c
-        WHERE c.id_part = %s;
+        WHERE c.id_part = (
+        SELECT id_part FROM part
+        ORDER BY created_at DESC
+        LIMIT 1
+    );
 
     """
 
-    #  = (
-    #     SELECT id_part FROM part
-    #     ORDER BY id_part DESC
-    #     LIMIT 1
-    # )
-    df_raw = pd.read_sql(query, conn,params=("0610235823728",) )
+    
+    df_raw = pd.read_sql(query, conn)
+    #df_raw = pd.read_sql(query, conn,params=("0610235823728",) )
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
     df.columns = df.columns.str.strip()
     die_id = df.index.get_level_values("id_die")[0]
@@ -287,19 +282,24 @@ def predictions():
     cur  = conn.cursor()
 
     #WRONG ORDER!!!
+    # query = """
+    #     SELECT c.*
+    #     FROM operating_parameter c
+    #     WHERE c.id_part = %s
+    #     ;
+
+    # """
     query = """
         SELECT c.*
         FROM operating_parameter c
-        WHERE c.id_part = %s
-        ;
-
+        WHERE c.id_part = (
+        SELECT id_part FROM part
+        ORDER BY created_at DESC
+        LIMIT 1
+    );
     """
 
-    # SELECT id_part FROM part
-    #     ORDER BY id_part DESC
-    #     LIMIT 1
-    # )
-    df_raw = pd.read_sql(query, conn, params=("0610235823728",))
+    df_raw = pd.read_sql(query, conn) #, params=("0610235823728",))
     # pd.read_sql(query, conn)
 
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
@@ -323,8 +323,8 @@ def predictions():
         WHERE c.id_calibration = %s;
 
     """
-
-    df_baselines = pd.read_sql(query, conn, params=(24,))
+    #For model bef it was 24
+    df_baselines = pd.read_sql(query, conn, params=('33',))
     
     #Temporary, will be removed after retraining model to so that it uses all parameters rather than having remove conditions
     df_baselines = df_baselines[df_baselines["parameter_name"] != "DIE-CLOSE CORE IN TIME"]
@@ -352,7 +352,7 @@ def predictions():
             feats = {}
             #In the baseline data, convert numeric values made earlier into numeric and ignore non numeric
             for col, v in baselines.items():
-                #col = PARAM_MAP_BL[col]
+                col = PARAM_MAP_BL[col]
                 val = pd.to_numeric(row.get(col, np.nan), errors="coerce")
                 avg = v["baseline"]
                 min_r = v["lower_tolerance"]
@@ -373,6 +373,7 @@ def predictions():
         #print(feat_df)
 
     pred_results = []
+    print("Going to model")
     # Use latest model for each die, 
     for defect in TARGET_DEFECTS:
         defect_tag   = defect.replace(" ", "_")
