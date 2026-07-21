@@ -1,6 +1,7 @@
 import psycopg2
 import json
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
+
 
 DB_CONFIG = {
     "host":     "aws-1-ap-southeast-2.pooler.supabase.com",
@@ -90,15 +91,19 @@ def update_date_path() -> str:
     cur.execute("SELECT MAX(created_at) FROM part")
     last_date = cur.fetchone()[0]
     # Fall back to a default if the table is empty
-    if last_date is None:
-        date_from = "2026-01-01"
-    else:
-        date_from = last_date.strftime("%Y-%m-%d")
+    date_from  = date.today().strftime("%Y-%m-%d")
 
-    date_to = date.today().strftime("%Y-%m-%d")
+
+    date_to = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
     data_path = f"{{BASE_URL}}/reports/report/data?dateFrom={{date_from}}&dateTo={{date_to}}"
     return data_path
+
+def date_processing(date):
+    naive = datetime.fromisoformat(date.replace("Z", ""))
+    ist = timezone(timedelta(hours=5, minutes=30))
+    correct_dt = naive.replace(tzinfo=ist)  # now correctly IST-aware
+    return correct_dt
 
 def process_data(data):
        
@@ -110,9 +115,9 @@ def process_data(data):
 
     part_id = data['part_id']
     client_code = "R437111511"
-    print(part_id)
+    print(f"Getting part id: " + "{part_id}")
     if(client_code in part_id):
-        print("Shot data missing, getting part data from client")
+        print("Check")
         return
     
     id_machine = data['plcReading']['machine_name']
@@ -120,7 +125,8 @@ def process_data(data):
     if id_die not in DIE_LIST:
         return
     print(id_die)
-    date = data['plcReading']['shot_date']
+    recorded_stamp = data['plcReading']['recorded_at']
+    date_ist = date_processing(date=recorded_stamp)
 
     #Connect to database
     conn = psycopg2.connect(**DB_CONFIG)
@@ -140,7 +146,7 @@ def process_data(data):
             id_client = EXCLUDED.id_client,
             id_machine = EXCLUDED.id_machine,
             manufactored_on = EXCLUDED.manufactored_on
-""", (part_id, id_die, id_client, id_machine, date, date))
+""", (part_id, id_die, id_client, id_machine, date_ist, datetime.now()))
 
     for param, val in data['plcReading'].items():
         if(param not in PARAM_MAP):
@@ -157,13 +163,13 @@ def process_data(data):
                     id_machine = EXCLUDED.id_machine,
                     value = EXCLUDED.value,
                     updated_at = EXCLUDED.updated_at
-        """, (part_id, id_die, id_client, id_machine, param_name, uom, val, date, date))
+        """, (part_id, id_die, id_client, id_machine, param_name, uom, val, date_ist, datetime.now()))
 
     if(data['reason'] != "" and data['reason'] != "RECOVERY_PENDING_AFTER_BACKEND_RESTART"):
         print(data['reason'])
         store_defect(cur, data, id_client)
 
-    conn.commit()
+    #conn.commit()
     cur.close()
     conn.close()
     return

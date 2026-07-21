@@ -94,7 +94,7 @@ def main(machine_id, die):
 
         uom = names_UOM.get(param, ["Unknown", ""])[1]
         
-        bl_params[param] = (new_avg, new_tol, new_avg - new_tol, new_avg + new_tol, uom)
+        bl_params[param] = (new_avg, new_tol, max(0, new_avg - new_tol), new_avg + new_tol, uom)
              
     print(num_samples) 
     return [bl_params, num_samples]

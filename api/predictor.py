@@ -19,9 +19,9 @@ def predict(die):
    # For testing with IOT data, can only run on my computer for that part, normal prediction should work (getting from DB)
 
     # print(ranges)
-    print(die)
+    #print(die)
     prediction = predictions()
-    print(prediction)
+    #print(prediction)
     #Output is this like: [0.2596754215669358, 0.7615386158702746, 0.6457570238583724, 0.9308658648280802, 0.8079451844474845, 0.14271445010752157]
     # For ["Blow_Hole","Crack","Non_filling","Porosity","Shrinkage","Chipoff"]
     
@@ -46,13 +46,14 @@ def monitor():
 
 @router.get("/update")
 def update():
-    # data_path = update_date_path()
-    # print(data_path)
+    data_path = update_date_path()
+    print(data_path)
     
-    # print("Authenticating...")
-    # token = get_auth_token()
-    # print(token)
+    print("Authenticating...")
+    token = get_auth_token()
+    #print(token)
 
-    # print("Fetching data...")
-    # get_iot_data(token, data_path)
+    print("Fetching data...")
+    get_iot_data(token, data_path)
+    print("Recieved Data")
     return

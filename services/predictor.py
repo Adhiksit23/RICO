@@ -11,7 +11,7 @@ except: os.system("pip install xgboost -q"); from xgboost import XGBClassifier
 warnings.filterwarnings("ignore")
 import psycopg2
 import pickle
-from datetime import date, timedelta
+from datetime import date, timedelta, timezone
 import requests
 from .data_processing import process_data
 import os
@@ -144,18 +144,13 @@ IOT_NAMES_UOM = {'accel_point': ['ACCEL. POINT', 'mm'],
 
 def update_date_path() -> str:
     #Connect to database
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur  = conn.cursor()
-
-    cur.execute("SELECT MAX(created_at) FROM part")
-    last_date = cur.fetchone()[0]
     # Fall back to a default if the table is empty
    
-    # date_from = date.today().strftime("%Y-%m-%d")
-    # date_to = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+    date_from = date.today().strftime("%Y-%m-%dT00:00:00")
+    date_to = (date.today() + timedelta(days=1)).strftime("%Y-%m-%dT00:00:00")
 
-    date_from = "2026-07-09T00:00:00"
-    date_to = "2026-07-09T06:00:00"
+    # date_from = "2026-07-16T00:00:00"
+    # date_to = "2026-07-16T12:00:00"
     data_path = f"/reports/report/data?dateFrom={date_from}&dateTo={date_to}"
     return data_path
 
@@ -181,19 +176,14 @@ def get_iot_data(token: str, data_path):
     url = f"{BASE_URL}{data_path}"
     headers = {"Authorization": f"Bearer {token}"}
  
-    resp = requests.get(url, headers=headers, timeout=15)
+    resp = requests.get(url, headers=headers, timeout=20)
     resp.raise_for_status()
     data = resp.json()
-    # if len(data['rows']) != 0:
-    #     last_record = data['rows'][0]
-    #     process_data(last_record)
-    row_index = next(i for i, row in enumerate(data['rows']) if row['part_id'] == '0709043124091')
-    if row_index is None:
-    # handle missing part_id — raise a clear error instead of crashing
-        raise ValueError(f"part_id 'xxx' not found in data['rows']")
-    row = data['rows'][row_index]
-    print(row['reason']) 
-    process_data(row)
+    if len(data['rows']) != 0:
+        print(len(data['rows']))
+        last_record = data['rows'][0]
+        process_data(last_record)
+    
     return
 
 
@@ -201,30 +191,13 @@ def get_latest_calibration(machine: str = None, die: str = None):
     conn = psycopg2.connect(**DB_CONFIG)
     cur  = conn.cursor()
 
-    #print(die)
-    
-    # query = """
-    #         SELECT c.parameter_name, c.baseline, c.upper_tolerance, c.lower_tolerance
-    #         FROM calibration_parameter c
-    #         WHERE c.id_calibration = (
-    #         SELECT id_calibration FROM die_calibration
-    #         WHERE id_die = %s
-    #         ORDER BY id_calibration DESC
-    #         LIMIT 1
-    #     );
-
-    #     """
-
-    # df_baselines = pd.read_sql(query, conn, params=(die,))
-
     query = """
         SELECT c.parameter_name, c.baseline, c.upper_tolerance, c.lower_tolerance
         FROM calibration_parameter c
         WHERE c.id_calibration = %s;
 
     """
-
-    df_baselines = pd.read_sql(query, conn, params=('33',))
+    df_baselines = pd.read_sql(query, conn, params=('39',))
     
     baselines = df_baselines.set_index('parameter_name').to_dict(orient='index')
 
@@ -232,7 +205,7 @@ def get_latest_calibration(machine: str = None, die: str = None):
     baselines = {k:v for k, v in baselines.items()}
     
     #print(baselines['V2'].keys())
-    print(baselines.keys())
+    #print(baselines.keys())
     conn.commit()
     cur.close()
     conn.close()
@@ -248,7 +221,7 @@ def monitor_data():
         FROM operating_parameter c
         WHERE c.id_part = (
         SELECT id_part FROM part
-        ORDER BY created_at DESC
+        ORDER BY manufactored_on DESC
         LIMIT 1
     );
 
@@ -256,7 +229,12 @@ def monitor_data():
 
     
     df_raw = pd.read_sql(query, conn)
-    #df_raw = pd.read_sql(query, conn,params=("0610235823728",) )
+
+    timestamp = df_raw["created_at"].iloc[0]  
+    ist = timezone(timedelta(hours=5, minutes=30))
+    formatted = timestamp.tz_convert(ist).strftime("%Y-%m-%dT%H:%M:%S")
+    #print(timestamp)      
+    
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
     df.columns = df.columns.str.strip()
     die_id = df.index.get_level_values("id_die")[0]
@@ -270,7 +248,7 @@ def monitor_data():
     parameters = X.iloc[0].to_dict()
     last_params = {PARAM_MAP[d]:v for d , v in parameters.items()}
     last_params["part_id"] = part_id
-    last_params["timestamp"] = "2026-07-03T19:42:11"
+    last_params["timestamp"] = formatted
     last_params["verdict"] = "REJECT"
     #print(last_params)
     return [last_params, die_id]
@@ -281,14 +259,6 @@ def predictions():
     conn = psycopg2.connect(**DB_CONFIG)
     cur  = conn.cursor()
 
-    #WRONG ORDER!!!
-    # query = """
-    #     SELECT c.*
-    #     FROM operating_parameter c
-    #     WHERE c.id_part = %s
-    #     ;
-
-    # """
     query = """
         SELECT c.*
         FROM operating_parameter c
@@ -299,14 +269,13 @@ def predictions():
     );
     """
 
-    df_raw = pd.read_sql(query, conn) #, params=("0610235823728",))
-    # pd.read_sql(query, conn)
+    df_raw = pd.read_sql(query, conn) 
 
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
     df.columns = df.columns.str.strip()
     die_id = df.index.get_level_values("id_die")[0]
     id_part = df.index.get_level_values("id_part")[0]
-    print(id_part)
+    #print(id_part)
     
     X = pd.DataFrame(index=df.index)
     for target_col in PARAM_COLS:
@@ -324,7 +293,7 @@ def predictions():
 
     """
     #For model bef it was 24
-    df_baselines = pd.read_sql(query, conn, params=('33',))
+    df_baselines = pd.read_sql(query, conn, params=('39',))
     
     #Temporary, will be removed after retraining model to so that it uses all parameters rather than having remove conditions
     df_baselines = df_baselines[df_baselines["parameter_name"] != "DIE-CLOSE CORE IN TIME"]
