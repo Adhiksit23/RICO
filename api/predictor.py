@@ -20,7 +20,7 @@ def predict(die):
 
     # print(ranges)
     #print(die)
-    prediction = predictions()
+    prediction = predictions(die)
     #print(prediction)
     #Output is this like: [0.2596754215669358, 0.7615386158702746, 0.6457570238583724, 0.9308658648280802, 0.8079451844474845, 0.14271445010752157]
     # For ["Blow_Hole","Crack","Non_filling","Porosity","Shrinkage","Chipoff"]
@@ -35,25 +35,25 @@ def predict(die):
     }
 
 @router.get("/monitor")
-def monitor():
-
-    data, die_id = monitor_data()
+def monitor(die):
+    print(die)
+    data, die_id = monitor_data(die)
     #print(die_id)
-    ranges = get_latest_calibration(die = die_id)
+    ranges = get_latest_calibration(die)
     #print([data, ranges])
     return [data, ranges]
 
 
 @router.get("/update")
 def update():
-    data_path = update_date_path()
-    print(data_path)
+    # data_path = update_date_path()
+    # print(data_path)
     
-    print("Authenticating...")
-    token = get_auth_token()
-    #print(token)
+    # print("Authenticating...")
+    # token = get_auth_token()
+    # #print(token)
 
-    print("Fetching data...")
-    get_iot_data(token, data_path)
-    print("Recieved Data")
+    # print("Fetching data...")
+    # get_iot_data(token, data_path)
+    # print("Recieved Data")
     return

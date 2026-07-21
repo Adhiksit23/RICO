@@ -27,7 +27,7 @@ TOKEN_JSON_PATH = "token"
  
 PARAM_COLS = [
     "cycletime value (sec)",
-    #"DIE CLOSE/CORE IN Parameter (sec)value",
+    "DIE CLOSE/CORE IN Parameter (sec)value",
     "POURING-step value (sec)",
     "SHOT FWD-step value (sec)",
     "COOLING-step value (sec)",
@@ -131,9 +131,9 @@ IOT_NAMES_UOM = {'accel_point': ['ACCEL. POINT', 'mm'],
             'furnace_metal_temp': ['FURNACE METAL TEMP.', 'C'], 
             'intensification_time': ['INTEN. TIME', 'msec'], 
             'intensification_acc_pressure': ['INTENSIFICATION ACC. PRESSURE', 'mPa'], 
-            'metal_pressure': ['METAL PRESS.', 'mPa'],
+            'metal_pressure': ['METAL PRESS.', 'Mpa'],
             'pouring_time': ['POURING TIME', 'sec'], 
-            'shot_acc_pressure': ['SHOT ACC. PRESSURE', 'Mpa'], 
+            'shot_acc_pressure': ['SHOT ACC. PRESSURE', 'MPa'], 
             'shot_fwd_time': ['SHOT FWD TIME', 'sec'], 
             'spray_time': ['SPRAY TIME', 'sec'], 
             'v1_speed': ['V1', 'm/sec'], 
@@ -212,7 +212,7 @@ def get_latest_calibration(machine: str = None, die: str = None):
     
     return baselines
 
-def monitor_data():
+def monitor_data(die):
     #Connect to database
     conn = psycopg2.connect(**DB_CONFIG)
 
@@ -221,14 +221,14 @@ def monitor_data():
         FROM operating_parameter c
         WHERE c.id_part = (
         SELECT id_part FROM part
+        WHERE id_die = %s
         ORDER BY manufactored_on DESC
         LIMIT 1
     );
 
     """
 
-    
-    df_raw = pd.read_sql(query, conn)
+    df_raw = pd.read_sql(query, conn, params=(die,))
 
     timestamp = df_raw["created_at"].iloc[0]  
     ist = timezone(timedelta(hours=5, minutes=30))
@@ -249,11 +249,11 @@ def monitor_data():
     last_params = {PARAM_MAP[d]:v for d , v in parameters.items()}
     last_params["part_id"] = part_id
     last_params["timestamp"] = formatted
-    last_params["verdict"] = "REJECT"
-    #print(last_params)
+    # last_params["verdict"] = "REJECT"
+    print(last_params)
     return [last_params, die_id]
 
-def predictions():
+def predictions(die):
 
     #Connect to database
     conn = psycopg2.connect(**DB_CONFIG)
@@ -264,18 +264,21 @@ def predictions():
         FROM operating_parameter c
         WHERE c.id_part = (
         SELECT id_part FROM part
-        ORDER BY created_at DESC
+        WHERE id_die = %s
+        ORDER BY manufactored_on DESC
         LIMIT 1
     );
+
     """
 
-    df_raw = pd.read_sql(query, conn) 
+    df_raw = pd.read_sql(query, conn, params=(die,))
 
     df = df_raw.pivot(index=["id_part", "id_die"], columns="parameter_name", values="value")
     df.columns = df.columns.str.strip()
     die_id = df.index.get_level_values("id_die")[0]
+    print(die == die_id)
     id_part = df.index.get_level_values("id_part")[0]
-    #print(id_part)
+    print(id_part)
     
     X = pd.DataFrame(index=df.index)
     for target_col in PARAM_COLS:
