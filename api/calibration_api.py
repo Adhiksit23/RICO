@@ -52,7 +52,7 @@ def calibration_ranges(
 ):
     #print(machine)
     ranges = compute_calibration_ranges(machine, die)
-    #print(ranges)
+    # print(ranges)
     return ranges
 
 @router.post("/apply")

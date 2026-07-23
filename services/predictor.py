@@ -229,7 +229,7 @@ def monitor_data(die):
     """
 
     df_raw = pd.read_sql(query, conn, params=(die,))
-
+    print(df_raw == None)
     timestamp = df_raw["created_at"].iloc[0]  
     ist = timezone(timedelta(hours=5, minutes=30))
     formatted = timestamp.tz_convert(ist).strftime("%Y-%m-%dT%H:%M:%S")

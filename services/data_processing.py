@@ -39,6 +39,7 @@ names_UOM = {'accel_point': ['ACCEL. POINT', 'mm'],
             "cycle_time": ["cycletime value (sec)", "sec"]}
 
  
+MACHINE_IDS = ["UBE 850T-1", "UBE 850T-2", "UBE 850T-3"]
 
 PARAM_MAP = {
     "cycle_time": "cycletime value (sec)",
